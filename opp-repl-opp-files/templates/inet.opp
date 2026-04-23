@@ -1,0 +1,22 @@
+# INET Framework as a dynamic library.  Place at the INET repo root.
+SimulationProject(
+    name="inet",
+    root_folder=".",
+    omnetpp_project="omnetpp",
+    library_folder="src",
+    bin_folder="bin",
+    build_types=["dynamic library"],
+    dynamic_libraries=["INET"],
+    ned_folders=["src", "examples", "showcases", "tutorials", "tests/networks"],
+    ini_file_folders=["examples", "showcases", "tutorials", "tests/fingerprint"],
+    media_folder="doc/media",
+    fingerprint_store="tests/fingerprint/store.json",
+    speed_store="tests/speed/store.json",
+    github_owner="inet-framework",
+    github_repository="inet",
+    github_workflows=[
+        "fingerprint-tests.yml",
+        "statistical-tests.yml",
+        "chart-tests.yml",
+    ],
+)

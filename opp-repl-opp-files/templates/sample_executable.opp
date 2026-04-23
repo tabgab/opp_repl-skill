@@ -1,0 +1,10 @@
+# OMNeT++ sample built as a standalone executable (e.g. aloha, fifo,
+# tictoc).  Place this file inside the sample directory.
+SimulationProject(
+    name="aloha",
+    root_folder=".",
+    omnetpp_project="omnetpp",
+    build_types=["executable"],
+    ned_folders=["."],
+    ini_file_folders=["."],
+)

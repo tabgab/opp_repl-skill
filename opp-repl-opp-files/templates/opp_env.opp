@@ -1,0 +1,8 @@
+# OMNeT++ installation managed by the opp_env tool.  All build and run
+# commands are routed through `opp_env run`.
+OmnetppProject(
+    name="omnetpp-6.3.0-opp_env",
+    root_folder=".",
+    opp_env_workspace="/home/user/opp_env",
+    opp_env_project="omnetpp-6.3.0",
+)

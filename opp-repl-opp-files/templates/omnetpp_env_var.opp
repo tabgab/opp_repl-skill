@@ -1,0 +1,6 @@
+# OMNeT++ installation located via the standard __omnetpp_root_dir
+# environment variable set by OMNeT++'s setenv script.
+OmnetppProject(
+    name="omnetpp",
+    root_folder_environment_variable="__omnetpp_root_dir",
+)

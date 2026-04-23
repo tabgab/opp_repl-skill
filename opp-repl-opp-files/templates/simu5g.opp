@@ -1,0 +1,14 @@
+# Simu5G depends on INET.  List INET in used_projects so the workspace
+# builds it first and includes its NED path.
+SimulationProject(
+    name="simu5g",
+    root_folder=".",
+    omnetpp_project="omnetpp",
+    library_folder="src",
+    bin_folder="bin",
+    build_types=["dynamic library"],
+    dynamic_libraries=["simu5g"],
+    used_projects=["inet"],
+    ned_folders=["src", "simulations"],
+    ini_file_folders=["simulations"],
+)

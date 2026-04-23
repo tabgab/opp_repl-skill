@@ -1,0 +1,6 @@
+# Standard OMNeT++ installation.  Place this file in the OMNeT++ root.
+# `root_folder="."` resolves to the directory holding this file.
+OmnetppProject(
+    name="omnetpp",
+    root_folder=".",
+)
