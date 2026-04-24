@@ -40,11 +40,21 @@ All are bundled as templates under `templates/` in this skill.
     #      templates/Source.{h,cc}    (example module)
     #      templates/Network.ned      (example network)
 
-    # 2. Generate the Makefile.
-    #    opp_repl exposes this as make_makefiles() — it runs
-    #    `make makefiles` which reads .oppbuildspec and invokes
-    #    opp_makemake with the correct options AND the correct
-    #    target name.
+    # 2. BOOTSTRAP: generate the Makefile ONCE via opp_makemake.
+    #    This is the step most commonly missed.  .oppbuildspec
+    #    isn't enough on its own — `make makefiles` only works
+    #    AFTER a Makefile already exists, so you need this shell
+    #    call the first time:
+    #
+    #        opp_makemake -f --deep -o <project_name>
+    #
+    #    From inside opp_repl, use subprocess:
+    import subprocess
+    subprocess.run(["opp_makemake", "-f", "--deep", "-o", "mm1k"],
+                   cwd=mm1k_project.root_folder, check=True)
+
+    # 2b. AFTER the first Makefile exists, future regenerations
+    #     (when .oppbuildspec changes) can use make_makefiles():
     from opp_repl.simulation.build import make_makefiles
     make_makefiles(simulation_project=mm1k_project)
 
@@ -58,8 +68,7 @@ All are bundled as templates under `templates/` in this skill.
 
 Single shell-equivalent recipe:
 
-    opp_makemake -f --deep -o mm1k \
-        $(xmllint --xpath 'string(//dir/@makemake-options)' .oppbuildspec)
+    opp_makemake -f --deep -o mm1k
     make MODE=release -j$(nproc)
     opp_run -r 0 -c General omnetpp.ini
 
@@ -73,9 +82,29 @@ exception message swallows the stderr.  Symptoms:
     Exception: Building mm1k failed
     # (no further info)
 
-**Fix: call `make_makefiles()` ONCE before the first build**, or
-add it to your project setup checklist.  You only need to call it
-again when `.oppbuildspec` changes.
+**Fix: bootstrap the Makefile with `opp_makemake` first**, then
+use `make_makefiles()` for future regenerations:
+
+    # Step 1 (once per project) — create the initial Makefile.
+    # Run this in a shell (or via subprocess from opp_repl) at
+    # the project root:
+    opp_makemake -f --deep -o <project_name>
+
+    # Step 2 (from now on) — `make_makefiles()` works because
+    # the top-level Makefile now has a `makefiles` target.
+    # Call this after every .oppbuildspec change:
+    make_makefiles(simulation_project=p)
+
+**DO NOT** put `--meta:recurse` or `--meta:export-library` or
+any other `--meta:*` flag on the `opp_makemake` command line.
+Those flags are consumed by `make makefiles` (which parses
+`.oppbuildspec` and translates them), not by `opp_makemake`
+itself — passing them directly gives:
+
+    makemake: error: unrecognized arguments: --meta:recurse ...
+
+It is fine — and idiomatic — to keep `--meta:*` flags inside
+`.oppbuildspec`.  Just don't duplicate them on the CLI.
 
 ## Why the executable is named wrong
 

@@ -307,28 +307,43 @@ Keep namespaces OFF in both C++ and NED (simplest; fewest traps).
 
 ### Step 2 — Build with the exact opp_repl call sequence
 
-This is the sequence that works.  Do not skip `make_makefiles()`.
+This is the sequence that works.  Critical: bootstrap with
+`opp_makemake` once BEFORE the first `build_project()`.
 
 ```python
-# Pre-req: OMNeT++ setenv sourced, opp_repl installed and setenv sourced
-# Working directory: /path/to/mm1k
+# Pre-req: setenv sourced correctly.  IMPORTANT ORDER:
+#   source <opp_repl>/setenv  FIRST   (activates .venv)
+#   source <omnetpp>/setenv   SECOND  (prepends OMNeT++ bin)
+# Verify with `command -v opp_makemake opp_run opp_repl`.
 
+# Working directory: /path/to/mm1k
+import subprocess
 from opp_repl.simulation.build import make_makefiles
 
 # Load project into workspace
 load_opp_file("./mm1k.opp")
 p = get_simulation_project("mm1k")
 
-# ALWAYS run make_makefiles() before the FIRST build
-make_makefiles(simulation_project=p)
+# BOOTSTRAP: create the initial Makefile ONCE.  Without this,
+# build_project() fails with "Exception: Building mm1k failed"
+# because there's no Makefile to run `make` against.
+subprocess.run(["opp_makemake", "-f", "--deep", "-o", "mm1k"],
+               cwd=p.root_folder, check=True)
 
-# Now build
+# From now on, opp_repl handles everything
 build_project(simulation_project=p)
 
-# Run 10 replications of 1000 seconds
-r = run_simulations(simulation_project=p, sim_time_limit="1000s",
-                    repeat_filter=".*")
+# Run 10 replications
+r = run_simulations(simulation_project=p, sim_time_limit="5000s",
+                    build=False, concurrent=True)
 assert r.is_all_results_done(), r.get_error_results()
+```
+
+If you later change `.oppbuildspec` or add/remove source files:
+
+```python
+make_makefiles(simulation_project=p)   # regenerate
+build_project(simulation_project=p)
 ```
 
 ### Step 3 — Parse results using the bundled script

@@ -14,11 +14,14 @@ decode table for every common failure.
 | `tr.stdout` / `tr.stderr` is `None` after ERROR            | `opp-repl-troubleshooting` §3                 |
 | `Class '<Name>' not found` during simulation startup       | `opp-repl-troubleshooting` §4                 |
 | `No targets specified and no makefile found`               | `opp-repl-troubleshooting` §1, §5             |
+| `make: *** No rule to make target 'makefiles'`             | `opp-repl-troubleshooting` §10                |
+| `makemake: error: unrecognized arguments: --meta:...`      | `opp-repl-troubleshooting` §11                |
+| `opp_makemake: command not found` after sourcing setenv    | `opp-repl-troubleshooting` §12                |
 | Simulations run but the numbers look wrong                 | `opp-repl-result-analysis`                    |
 | A test reports `SKIP` instead of PASS/FAIL                 | `opp-repl-troubleshooting` §8                 |
 | `Address already in use` on `--mcp-port`                   | `opp-repl-troubleshooting` §9                 |
 | Agent wrote a regex parser for .sca                        | `opp-repl-result-analysis` (use the bundled script) |
-| Agent called `subprocess.run(["opp_makemake", ...])`       | `opp-repl-project-scaffolding` (use `make_makefiles()`) |
+| Agent called `subprocess.run(["opp_makemake", ...])`       | That's correct for the BOOTSTRAP step — see `opp-repl-project-scaffolding` |
 
 ## The three highest-leverage fixes
 
@@ -27,13 +30,18 @@ decode table for every common failure.
 ### 1. "Building X failed" with no detail
 
 **Root cause:** no Makefile yet.
-**Fix:**
+**Fix:** bootstrap with `opp_makemake` first, then use
+`make_makefiles()` for subsequent regenerations:
 
+    # Step 1 (once per project): bootstrap the Makefile
+    opp_makemake -f --deep -o <project_name>
+
+    # Step 2 (now and forever): opp_repl handles the rest
     from opp_repl.simulation.build import make_makefiles
     make_makefiles(simulation_project=my_project)
     build_project(simulation_project=my_project)
 
-Full detail: `opp-repl-project-scaffolding` + `opp-repl-troubleshooting` §1.
+Full detail: `opp-repl-project-scaffolding` + `opp-repl-troubleshooting` §1, §10.
 
 ### 2. Exit code 127 on every run
 

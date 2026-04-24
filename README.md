@@ -22,10 +22,14 @@ are:
 
 - `WINDSURF.md` — **step-by-step Windsurf installation**
   (global, workspace, and UI options).
-- `USAGE_EXAMPLES.md` — seven end-to-end prompt/response scenarios
+- `USAGE_EXAMPLES.md` — eight end-to-end prompt/response scenarios
   showing which skills load when.
 - `TROUBLESHOOTING.md` — symptom-to-skill lookup for common
   build / run / analysis failures (read this when things break).
+- `VERIFICATION.md` — end-to-end log of the M/M/1/K scenario
+  being run through the skill pack.  Proof that the pack works
+  on stock OMNeT++ from zero files to validated numerical
+  results within 3.2% of the analytical reference.
 - `opp-repl-overview/SKILL.md` — the entry-point skill, with a
   decision tree that maps tasks to the exact siblings to load.
 - `opp-repl-ai-workflows/SKILL.md` — cookbook for agents driving

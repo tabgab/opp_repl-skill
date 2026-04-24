@@ -72,6 +72,32 @@ After this, `opp_repl`, `opp_build_project`, `opp_run_simulations`,
 and every `opp_run_*_tests` / `opp_update_*_test_results` wrapper is
 on PATH.
 
+### PITFALL — the setenv order trap
+
+Sourcing opp_repl's setenv AFTER OMNeT++'s setenv activates
+opp_repl's `.venv`, which **restores a snapshotted PATH from the
+moment the venv was created** — typically a PATH that does NOT
+have OMNeT++'s `bin/` on it.  Symptoms:
+
+    $ source ~/omnetpp/setenv -q
+    $ source ~/opp_repl/setenv
+    $ opp_makemake --help
+    bash: opp_makemake: command not found        # ← wrong
+
+The fix is to source them in the REVERSE order:
+
+    cd ~/workspace/opp_repl && . setenv   # opp_repl FIRST (activates venv)
+    cd ~/workspace/omnetpp && . setenv    # OMNeT++ SECOND (prepends its bin)
+
+After this ordering, `opp_makemake`, `opp_run`, `opp_scavetool`,
+AND every `opp_repl` / `opp_run_*` wrapper are all reachable.
+**Always verify with `command -v opp_makemake opp_run opp_repl`
+after sourcing; if any is missing, re-order the sourcing.**
+
+Alternatively, create the opp_repl venv AFTER first sourcing
+OMNeT++'s setenv — then the snapshotted PATH already contains
+OMNeT++'s `bin/`, and either sourcing order works.
+
 ## 5. Verify
 
     opp_repl --help            # should print the CLI usage
@@ -95,6 +121,12 @@ Expect a short summary ending in `DONE` for each PureAloha run.
 - If `__omnetpp_root_dir` is unset, projects that rely on the
   auto-detected OMNeT++ installation will fail with confusing errors;
   always source OMNeT++'s `setenv` first.
+- **The setenv-order trap** (see §4 above) — sourcing opp_repl
+  setenv AFTER OMNeT++ setenv can erase OMNeT++'s bin from PATH
+  because the venv activation restores a snapshotted PATH.  If
+  `opp_makemake` or `opp_run` goes missing after sourcing, reverse
+  the order: opp_repl FIRST, then OMNeT++.  Always verify with
+  `command -v opp_makemake opp_run opp_repl`.
 
 ## See also
 
