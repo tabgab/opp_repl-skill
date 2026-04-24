@@ -11,22 +11,25 @@ Copy these into a fresh project directory, then edit each file:
 
 After copying, run these exact calls in opp_repl:
 
-    # Bootstrap the Makefile ONCE (the step most commonly missed)
-    import subprocess
-    subprocess.run(["opp_makemake", "-f", "--deep", "-o", "<yourname>"],
-                   cwd=".", check=True)
-
-    # From now on, opp_repl handles the build-run-analyse loop
-    from opp_repl.simulation.build import make_makefiles
+    # Load project
+    load_opp_file("./<yourname>.opp")
     p = get_simulation_project("<yourname>")
+
+    # Build — on current opp_repl main, this auto-generates the
+    # Makefile from .oppbuildspec on first call.
     build_project(simulation_project=p)
+
+    # Run
     run_simulations(simulation_project=p, sim_time_limit="100s")
 
-If you ever edit `.oppbuildspec` or add/remove source files that
-affect the target list, regenerate the Makefile with:
+If you later edit `.oppbuildspec` or reorganise the source layout:
 
-    make_makefiles(simulation_project=p)
+    from opp_repl.simulation.build import generate_makefile
+    generate_makefile(simulation_project=p)
+    build_project(simulation_project=p)
 
-If this stops working ("No rule to make target 'makefiles'"), re-
-bootstrap with `opp_makemake -f --deep -o <yourname>` — the
-top-level Makefile has been lost.
+Older opp_repl (before April 2026 / commit 21ea1f0) required a
+manual `opp_makemake -f --deep -o <yourname>` before the first
+build.  If `build_project()` fails with "Building X failed" on
+a fresh project, you're on older opp_repl — use the manual
+bootstrap or update opp_repl.

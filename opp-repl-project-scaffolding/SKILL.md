@@ -40,31 +40,29 @@ All are bundled as templates under `templates/` in this skill.
     #      templates/Source.{h,cc}    (example module)
     #      templates/Network.ned      (example network)
 
-    # 2. BOOTSTRAP: generate the Makefile ONCE via opp_makemake.
-    #    This is the step most commonly missed.  .oppbuildspec
-    #    isn't enough on its own — `make makefiles` only works
-    #    AFTER a Makefile already exists, so you need this shell
-    #    call the first time:
-    #
-    #        opp_makemake -f --deep -o <project_name>
-    #
-    #    From inside opp_repl, use subprocess:
-    import subprocess
-    subprocess.run(["opp_makemake", "-f", "--deep", "-o", "mm1k"],
-                   cwd=mm1k_project.root_folder, check=True)
-
-    # 2b. AFTER the first Makefile exists, future regenerations
-    #     (when .oppbuildspec changes) can use make_makefiles():
-    from opp_repl.simulation.build import make_makefiles
-    make_makefiles(simulation_project=mm1k_project)
-
-    # 3. Build.
+    # 2. Build.
+    #    On current opp_repl main (>= commit 21ea1f0, Apr 2026),
+    #    build_project() auto-generates the Makefile by calling
+    #    generate_makefile() internally — it reads .oppbuildspec,
+    #    strips --meta:* flags, adds `-o <project_name>` when
+    #    build_types includes "executable", and runs opp_makemake.
+    #    You just call:
     build_project(simulation_project=mm1k_project)
 
-    # 4. Run.
+    # 3. Run.
     r = run_simulations(simulation_project=mm1k_project,
                         sim_time_limit="100s")
     assert r.is_all_results_done()
+
+    # ── for older opp_repl (pre-21ea1f0) the bootstrap used
+    # ── to need an explicit opp_makemake call first:
+    #     import subprocess
+    #     subprocess.run(["opp_makemake", "-f", "--deep", "-o", "mm1k"],
+    #                    cwd=p.root_folder, check=True)
+    #     build_project(simulation_project=p)
+    # If `build_project()` fails with "No targets specified and no
+    # makefile found", you're on older opp_repl — either update or
+    # use the workaround above.
 
 Single shell-equivalent recipe:
 
@@ -72,39 +70,28 @@ Single shell-equivalent recipe:
     make MODE=release -j$(nproc)
     opp_run -r 0 -c General omnetpp.ini
 
-## Why `build_project()` fails with "no explanation"
+## Why `build_project()` used to fail with "no explanation"
 
-`build_project()` calls `make MODE=release` under the hood.  If
-there is no `Makefile` in the project root, `make` fails with
-`No targets specified and no makefile found` — but opp_repl's
-exception message swallows the stderr.  Symptoms:
+On older opp_repl (before commit 21ea1f0, "Added generate_makefile
+using .oppbuildspec if found, otherwise use sensible defaults"),
+`build_project()` called `make MODE=release` with no Makefile
+present and failed with:
 
     Exception: Building mm1k failed
     # (no further info)
 
-**Fix: bootstrap the Makefile with `opp_makemake` first**, then
-use `make_makefiles()` for future regenerations:
+**This is fixed on current main.**  `build_project()` now detects
+a missing `Makefile` and auto-runs `generate_makefile()`, which
+reads `.oppbuildspec` and invokes `opp_makemake` with the right
+flags (stripping `--meta:*` which is only valid inside
+.oppbuildspec, adding `-o <project_name>` when the project is
+declared as an executable).
 
-    # Step 1 (once per project) — create the initial Makefile.
-    # Run this in a shell (or via subprocess from opp_repl) at
-    # the project root:
+If you're on older opp_repl, bootstrap manually:
+
     opp_makemake -f --deep -o <project_name>
 
-    # Step 2 (from now on) — `make_makefiles()` works because
-    # the top-level Makefile now has a `makefiles` target.
-    # Call this after every .oppbuildspec change:
-    make_makefiles(simulation_project=p)
-
-**DO NOT** put `--meta:recurse` or `--meta:export-library` or
-any other `--meta:*` flag on the `opp_makemake` command line.
-Those flags are consumed by `make makefiles` (which parses
-`.oppbuildspec` and translates them), not by `opp_makemake`
-itself — passing them directly gives:
-
-    makemake: error: unrecognized arguments: --meta:recurse ...
-
-It is fine — and idiomatic — to keep `--meta:*` flags inside
-`.oppbuildspec`.  Just don't duplicate them on the CLI.
+then call `build_project()` as usual.
 
 ## Why the executable is named wrong
 
