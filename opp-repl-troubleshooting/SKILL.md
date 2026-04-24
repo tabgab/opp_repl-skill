@@ -1,0 +1,248 @@
+---
+name: opp-repl-troubleshooting
+description: Decode opaque opp_repl errors into actionable fixes. Maps every common failure mode ("Building X failed", exit code 127, "Class not found", scalar/stderr None on ERROR, namespace mismatch) to its root cause and remedy. Load when a build or run fails and the immediate output gives no useful clue — this skill tells you WHERE the real information hides and HOW to extract it without leaving opp_repl. Required companion skill for any non-trivial project work, especially new projects from scratch.
+---
+
+# Troubleshooting opp_repl failures
+
+Most opp_repl errors hide the real cause one or two steps away
+from the exception message.  This skill is a **lookup table**
+from visible symptom to fix.  Start at the section that matches
+your symptom.
+
+## Symptom -> Section quick index
+
+| Your exception/error message                                      | See section |
+|-------------------------------------------------------------------|-------------|
+| `Exception: Building <X> failed` (no other info)                  | §1          |
+| `ERROR (Non-zero exit code: 127)`                                 | §2          |
+| `tr.stdout` or `tr.stderr` is `None` after a failed run           | §3          |
+| `Class '<Name>' not found` inside simulation stderr               | §4          |
+| `No such file or directory: .../Makefile`                         | §5          |
+| `(executable) not found` / `execvp`                               | §2          |
+| Config filter matched, but `num_runs = 1` when INI says more      | §6          |
+| `The simulation attempted to prompt for user input`               | §7          |
+| Fingerprint/statistical/speed test reports `SKIP`                 | §8          |
+| `MCP port already in use` / `Address already in use`              | §9          |
+
+## §1. "Building X failed" with no further output
+
+**Root cause (95% of cases):** no `Makefile` exists yet.
+
+`build_project()` wraps `make MODE=release`.  Without a Makefile,
+`make` writes `*** No targets specified and no makefile found` to
+stderr, but opp_repl's exception message discards it.
+
+**Fix:**
+
+    from opp_repl.simulation.build import make_makefiles
+    make_makefiles(simulation_project=my_project)   # runs `make makefiles`
+    build_project(simulation_project=my_project)
+
+`make_makefiles()` reads `.oppbuildspec` and runs `opp_makemake`
+with the right options.  If `.oppbuildspec` is missing, see
+`opp-repl-project-scaffolding` for the template.
+
+**Alternative root causes (less common):**
+
+- Compiler error — verify by running `make MODE=release` manually in
+  the project root; read its stderr.  Typical culprits: missing
+  `#include <omnetpp.h>`, wrong C++ standard, missing dependency.
+- Dependency project failed to build — `used_projects=["inet"]`
+  pulls INET in recursively; a broken INET propagates.
+
+## §2. ERROR (Non-zero exit code: 127)
+
+**Root cause:** The shell tried to execute a program that does not
+exist.  OMNeT++ wraps runs in `nice`, so the symptom typically
+reads:
+
+    nice: execvp: No such file or directory
+
+Common culprits:
+
+1. **Executable name mismatch.**  `opp_repl` looks for a binary
+   named after `simulation_project.name` but `opp_makemake` built
+   a binary with a different name.  See
+   `opp-repl-project-scaffolding` §"Why the executable is named wrong".
+2. **Stale binary after a rename.**  You renamed the project; the
+   old binary still sits in the project root.  Fix: `clean_project()`
+   or manually `rm -f ./<oldname>` then rebuild.
+3. **Wrong `build_types`** — project was built as a dynamic library
+   but `.opp` says `build_types=["executable"]`.  Match them.
+
+**How to see the real error:**
+
+    tr = r.results[0]           # the failed SimulationTaskResult
+    print(tr.subprocess_result.stderr)   # <-- here is the truth
+
+(`tr.stderr` / `tr.stdout` may be `None` on early failures.  See §3.)
+
+## §3. `tr.stdout` / `tr.stderr` is None after ERROR
+
+**Root cause:** `SimulationTaskResult` only populates `stdout` and
+`stderr` from subprocess output that was written to the configured
+output files (`cmdenv-output-file`, etc.).  If the simulation died
+*before* writing anything (e.g. fork failure, missing binary,
+dynamic-library loader error) the files don't exist, so the fields
+stay `None`.
+
+**Fix: always check `subprocess_result` first on ERRORs.**
+
+    if tr.result_code == "ERROR":
+        sp = tr.subprocess_result
+        print(f"exit code: {sp.returncode}")
+        print(f"stderr: {sp.stderr}")
+        print(f"stdout: {sp.stdout}")
+
+Exit codes worth recognising:
+
+| code  | meaning                                                    |
+|-------|------------------------------------------------------------|
+| 127   | command not found (binary missing or wrong name; see §2)   |
+| 126   | command found but not executable (chmod, wrong arch)       |
+| 134   | SIGABRT — often an assertion or uncaught C++ exception     |
+| 139   | SIGSEGV — crash; build with `mode="sanitize"` to diagnose  |
+| 143   | SIGTERM — external kill (CI timeout?)                      |
+| 1-2   | simulation raised `cRuntimeError` — see stderr for details |
+
+## §4. "Class '<Name>' not found" during simulation startup
+
+**Root cause (almost always):** NED `package` declaration and C++
+`namespace` don't match.
+
+Your C++ has:
+
+    namespace mm1k {
+        Define_Module(Source);     // registers as "mm1k::Source"
+    }
+
+But your NED has no `package mm1k;` line, so OMNeT++ looks for the
+global name `Source` and finds nothing.  (Or vice versa.)
+
+**Diagnostic call:**
+
+    # Which class names are registered in the binary?
+    opp_run_release -a omnetpp.ini | grep -i "source"
+    # (opp_run_release is on PATH after sourcing OMNeT++ setenv)
+
+**Fix (pick one):**
+
+- Add `package mm1k;` as the first non-comment line in every
+  `.ned` file in the project.  This is the idiomatic fix and lets
+  the C++ keep its `namespace mm1k { }` wrapper.
+- OR remove the `namespace X { ... }` wrapper from every `.cc`
+  file that calls `Define_Module(...)`.  All classes then register
+  in the root namespace.
+
+Do NOT mix-and-match inside one project.  If some .cc files have
+namespaces and some don't, OMNeT++ only finds the ones that match
+your .ned declarations.
+
+## §5. Missing Makefile
+
+Typical messages:
+
+- `make: *** No targets specified and no makefile found.  Stop.`
+- `FileNotFoundError: .../Makefile`
+
+**Fix:** same as §1 — call `make_makefiles(simulation_project=p)`.
+This is ALWAYS safe to re-run; it's idempotent.
+
+## §6. INI says `repeat=N`, opp_repl shows `num_runs=1`
+
+**Root cause:** opp_repl tries OMNeT++'s Python bindings to parse
+the INI file first.  If the parse fails (e.g. unknown
+configuration option, custom `configuration-class`), it falls back
+to running `opp_run -q numruns` — but some custom configs also
+fail there.  When BOTH fail, opp_repl logs a warning and uses
+`num_runs=1`.
+
+**Fix:**
+
+- Watch the startup log for `WARN Could not determine number of runs`.
+- Remove or quote unknown options in `omnetpp.ini`.  A frequent
+  offender: `**.with-akaroa = true` on non-Akaroa OMNeT++ builds.
+- Manually override per call: `run_simulations(run_number_filter=".*")`
+  lists what opp_repl thinks the runs are; if you expect more,
+  your INI has a parse issue.
+
+## §7. "The simulation attempted to prompt for user input"
+
+**Root cause:** the simulation hit an unassigned `volatile`
+parameter or `cmdenv-interactive=true`.  opp_repl can't answer
+prompts, so it flags the run `SKIP`.
+
+**Fix:**
+
+- Assign every NED parameter in `omnetpp.ini` (look for
+  `parameter ... has no value` in the stderr).
+- Set `cmdenv-interactive = false` in the `[General]` section.
+
+## §8. Test reports SKIP instead of PASS/FAIL
+
+For fingerprint / statistical / speed tests, `SKIP` means "no
+baseline exists for this (config, run, time-limit) key".
+
+**Fix:** seed the baseline:
+
+    update_fingerprint_test_results(simulation_project=p, sim_time_limit="1s")
+    update_statistical_test_results(simulation_project=p)
+    update_speed_test_results(simulation_project=p)
+    update_chart_test_results(simulation_project=p)
+
+Then re-run the test.  See `opp-repl-fingerprint-tests` etc. for
+the full baseline lifecycle.
+
+## §9. MCP port already in use
+
+**Root cause:** another `opp_repl` process is already bound to
+the same port (default `9966`), or a previous one crashed without
+releasing it.
+
+**Fix:**
+
+    # Launch without starting an MCP server:
+    opp_repl --mcp-port 0 --load "*.opp"
+
+    # Or pick a different port:
+    opp_repl --mcp-port 9977 --load "*.opp"
+
+    # Find / kill the stale process:
+    lsof -iTCP:9966 -sTCP:LISTEN     # what's bound?
+    fuser -k 9966/tcp                # terminate it
+
+In CI always pass `--mcp-port 0`.  This avoids collisions when
+multiple jobs run in parallel.
+
+## Generic debug recipe
+
+When you hit an error this skill doesn't cover:
+
+1. **Always** print `tr.subprocess_result.stderr` and
+   `tr.subprocess_result.stdout` — they contain the raw output.
+2. Check the actual files: `ls results/` for `.sca`/`.vec`/`.out`.
+   `.out` files are line-by-line cmdenv logs.
+3. Re-run the single failing task in `mode="debug"` to get less
+   stripped-down error messages:
+   `failed.rerun(mode="debug")`.
+4. Try the equivalent `opp_run` call by hand — look at the
+   arguments opp_repl used:
+
+       print(tr.subprocess_result.args)
+       # e.g. ['opp_run_release', '-u', 'Cmdenv', '-r', '0',
+       #      '-c', 'General', 'omnetpp.ini']
+
+   Run that command directly in a shell at the simulation's
+   working directory.  The full OMNeT++ stderr appears there.
+
+5. Only if all of the above fail: enable verbose logging.
+
+       opp_repl -l DEBUG --external-command-log-level DEBUG ...
+
+## See also
+
+- `opp-repl-project-scaffolding` — prevents most §1, §2, §4, §5 errors.
+- `opp-repl-result-analysis` — when runs succeed but results look wrong.
+- `opp-repl-tasks-and-results` — `TaskResult` fields and rerun APIs.
+- `opp-repl-running-simulations` — the run pipeline that produces these errors.

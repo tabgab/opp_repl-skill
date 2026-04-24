@@ -1,0 +1,126 @@
+Subject: opp_repl skills pack — delivered
+
+Hi Gabor,
+
+The opp_repl skills pack is delivered. Summary below.
+
+═══════════════════════════════════════════════════════
+WHAT YOU GOT
+═══════════════════════════════════════════════════════
+
+A composable Anthropic-format Agent Skills pack that turns the
+opp_repl docs (github.com/omnetpp/opp_repl) into 26 reusable
+skills that any SKILL.md-aware agent (Claude, Windsurf/Cascade,
+and others) can load on demand.
+
+Repo (live):      https://github.com/tabgab/opp_repl-skill
+Local checkout:   /home/gabor/DEV/skills4_opp_repl
+
+═══════════════════════════════════════════════════════
+CONTENTS
+═══════════════════════════════════════════════════════
+
+26 SKILL.md files grouped into 6 functional layers:
+
+FOUNDATIONS (4)
+  opp-repl-overview               entry point + feature-to-skill map
+  opp-repl-installation           pip, extras, setenv, PEP-668
+  opp-repl-concepts               workspace / project / config / task
+  opp-repl-opp-files              .opp descriptors + 7 templates
+
+EXECUTION & CONTROL (5)
+  opp-repl-repl-usage             IPython launch, namespace, autoreload
+  opp-repl-cli-tools              shell wrappers for CI
+  opp-repl-running-simulations    build_project + run_simulations
+  opp-repl-filtering              shared filter vocabulary
+  opp-repl-tasks-and-results      task hierarchy, rerun, drill-down
+
+REGRESSION TESTS (7)
+  opp-repl-smoke-tests            start/terminate checks
+  opp-repl-fingerprint-tests      event-level behavioural regression
+  opp-repl-statistical-tests      scalar-level regression
+  opp-repl-speed-tests            CPU-instruction-count regression
+  opp-repl-chart-tests            image-based regression
+  opp-repl-sanitizer-tests        ASAN/UBSan runs
+  opp-repl-feature-and-release-tests   aggregate suites
+
+ANALYSIS (4)
+  opp-repl-comparing-simulations  cross-project/cross-commit comparison
+  opp-repl-parameter-optimization scipy Nelder-Mead tuning
+  opp-repl-coverage-reports       LLVM line coverage
+  opp-repl-profiling              perf + Hotspot
+
+INFRASTRUCTURE (4)
+  opp-repl-overlay-builds         fuse-overlayfs layers
+  opp-repl-ssh-cluster            Dask over SSH
+  opp-repl-github-actions         dispatch_workflow
+  opp-repl-opp-env-integration    routing through opp_env run
+
+AI INTEGRATION (2)
+  opp-repl-mcp-server             MCP endpoint (execute_python, URIs)
+  opp-repl-ai-workflows           seven end-to-end recipes for agents
+
+Plus at the repo root:
+  README.md               index + dependency map
+  WINDSURF.md             step-by-step Windsurf installation
+  USAGE_EXAMPLES.md       seven prompt/response scenarios
+  opp-repl-opp-files/templates/
+                          omnetpp.opp, inet.opp, simu5g.opp, overlay.opp,
+                          opp_env.opp, opp_env_sim.opp, sample_executable.opp,
+                          omnetpp_env_var.opp
+
+═══════════════════════════════════════════════════════
+DESIGN PRINCIPLES (from Anthropic's Agent Skills spec)
+═══════════════════════════════════════════════════════
+
+- Progressive disclosure: frontmatter name+description loads at
+  startup; body loads on demand; bundled files load only when
+  referenced.
+- Short bodies (60-200 lines each, 58-176 in practice).
+- Cross-references via a "See also" block at the bottom of each
+  skill. All 26 cross-refs resolve to real siblings (validated).
+- Descriptions are 236-438 chars each — specific enough to trigger
+  automatically, short enough to scan at load time.
+
+═══════════════════════════════════════════════════════
+HOW TO USE IN WINDSURF (TL;DR)
+═══════════════════════════════════════════════════════
+
+    git clone https://github.com/tabgab/opp_repl-skill.git ~/opp_repl-skill
+    mkdir -p ~/.codeium/windsurf/skills
+    for dir in ~/opp_repl-skill/opp-repl-*; do
+        ln -sfn "$dir" ~/.codeium/windsurf/skills/
+    done
+
+Restart Windsurf; @-mention any skill in the Cascade panel (e.g.
+`@opp-repl-overview`) or let Cascade auto-invoke based on prompt.
+Full walkthrough (UI option, workspace-scoped option, Windows
+PowerShell equivalent, MCP hookup) in WINDSURF.md.
+
+═══════════════════════════════════════════════════════
+HOW TO USE IN CLAUDE
+═══════════════════════════════════════════════════════
+
+    git clone https://github.com/tabgab/opp_repl-skill.git
+    cp -r opp_repl-skill/opp-repl-* ~/.claude/skills/
+
+Or leave the clone in place and point Claude Code / Desktop at it.
+
+═══════════════════════════════════════════════════════
+BONUS
+═══════════════════════════════════════════════════════
+
+I also saved a new skill in my own memory called
+"building-agent-skill-packs" (under software-development/). It
+captures the process used to build this pack so the next time
+someone asks me to turn a tool's docs into an agent skill pack, I
+follow the same pitfall-aware workflow — ingest docs, design the
+skill graph, author with progressive disclosure, validate cross-
+references, produce a README index.
+
+Let me know if you want anything tweaked — e.g. adjusting the
+split granularity, renaming skills for your Hermes/Windsurf
+conventions, or extending USAGE_EXAMPLES.md with more
+project-specific scenarios.
+
+— Claude (via Hermes)

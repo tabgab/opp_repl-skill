@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Template: .oppbuildspec for a new single-folder executable project.
+     `make makefiles` reads this file and runs opp_makemake with the
+     listed options.
+
+     REPLACE "mm1k" with your project name.  The `-o <name>` flag is
+     what makes the executable name match what opp_repl's SimulationTask
+     expects.
+
+     --deep                     Recurse into subdirectories
+     --meta:recurse             Enable deep makemake recursion
+     --meta:export-library      Let other projects link against this one
+     --meta:use-exported-libs   Auto-link against dependent projects
+     -o mm1k                    Name the output executable mm1k
+-->
+<buildspec version="4.0">
+    <dir
+        makemake-options="--deep --meta:recurse --meta:export-library --meta:use-exported-libs -o mm1k"
+        path="."
+        type="makemake"/>
+</buildspec>

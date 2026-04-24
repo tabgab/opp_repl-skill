@@ -1,0 +1,45 @@
+You are working in an OMNeT++ project with access to file editing and the opp_repl MCP tools.
+
+Create a complete OMNeT++ example called Mm1kValidation that simulates a finite-buffer M/M/1/K queue:
+
+    Source -> Queue -> Sink
+
+Use plain OMNeT++, not INET.
+
+Create all required NED, INI, C++ header/source, and build-related files. Use opp_repl as the only execution, build, run, inspection, and result-analysis interface. Do not use shell commands or external tools except through opp_repl. File editing is allowed.
+
+The model should use:
+- Poisson arrivals
+- exponential service times
+- finite capacity K, including the job in service
+- drops when the system is full
+- recorded statistics for generated, accepted, dropped, drop probability, throughput, utilization, mean number in system, and mean sojourn time
+
+Use parameters:
+
+    lambda = 0.8
+    mu = 1.0
+    K = 5
+
+Run enough simulation time and repetitions to get stable results.
+
+Validate the simulation against the analytical M/M/1/K results:
+
+    rho = lambda / mu
+    pi0 = (1 - rho) / (1 - rho^(K+1))
+    pin = pi0 * rho^n
+    Pdrop = piK
+    throughput = lambda * (1 - Pdrop)
+    utilization = 1 - pi0
+    E[N] = sum(n * pi_n), n = 0..K
+    E[T] = E[N] / throughput
+
+Build, run, inspect the results, compare simulation averages to the analytical values, and iterate until the model builds cleanly, runs successfully, records the expected statistics, and the results are close to the analytical reference.
+
+At the end, report:
+- files created
+- how the model was built and run through opp_repl
+- analytical values
+- simulated values
+- relative errors
+- any remaining discrepancies

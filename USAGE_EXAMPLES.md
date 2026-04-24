@@ -260,6 +260,140 @@ run_sanitizer_tests(simulation_project=inet_project,
 ```
 
 ═══════════════════════════════════════════════════════
+SCENARIO 8 — "Create an M/M/1/K simulation from scratch
+and validate it analytically."  (END-TO-END, WEAK-MODEL FRIENDLY)
+═══════════════════════════════════════════════════════
+
+This is the full "build a simulation from zero" flow — the
+hardest thing opp_repl agents do.  It mirrors the actual friction
+captured in the opp_repl skill-pack's `skilldebug.md` and is
+designed so a weaker model can follow step-by-step without
+"reasoning from scratch".
+
+Prompt:
+
+> Create a complete OMNeT++ example called Mm1kValidation that
+> simulates a finite-buffer M/M/1/K queue (Source -> Queue -> Sink)
+> with lambda=0.8, mu=1.0, K=5.  Validate against analytical
+> M/M/1/K formulas.
+
+Skills to load (in order, the weak model doesn't have to pick):
+
+1. `opp-repl-overview`              (decision tree)
+2. `opp-repl-project-scaffolding`   (CRITICAL — provides the
+                                    canonical file set + call order)
+3. `opp-repl-opp-files`             (template for the .opp)
+4. `opp-repl-running-simulations`   (build + run)
+5. `opp-repl-result-analysis`       (read .sca for validation)
+6. `opp-repl-troubleshooting`       (on standby for when things break)
+
+### Step 1 — Copy templates from the scaffolding skill
+
+From `opp-repl-project-scaffolding/templates/`, copy and edit:
+
+```
+mm1k/
+├── mm1k.opp              # from project.opp — change "mm1k" to "mm1k"
+├── .oppbuildspec         # from .oppbuildspec — set -o mm1k
+├── .nedfolders           # from .nedfolders — leave as "."
+├── omnetpp.ini           # from omnetpp.ini — edit configs
+├── Mm1k.ned              # from Network.ned — rename network, add Queue
+├── Source.h / .cc        # from Source.h / .cc
+├── Queue.h  / .cc        # duplicate Source.* and implement M/M/1/K queue
+└── Sink.h   / .cc        # duplicate Source.* — collect statistics
+```
+
+Keep namespaces OFF in both C++ and NED (simplest; fewest traps).
+
+### Step 2 — Build with the exact opp_repl call sequence
+
+This is the sequence that works.  Do not skip `make_makefiles()`.
+
+```python
+# Pre-req: OMNeT++ setenv sourced, opp_repl installed and setenv sourced
+# Working directory: /path/to/mm1k
+
+from opp_repl.simulation.build import make_makefiles
+
+# Load project into workspace
+load_opp_file("./mm1k.opp")
+p = get_simulation_project("mm1k")
+
+# ALWAYS run make_makefiles() before the FIRST build
+make_makefiles(simulation_project=p)
+
+# Now build
+build_project(simulation_project=p)
+
+# Run 10 replications of 1000 seconds
+r = run_simulations(simulation_project=p, sim_time_limit="1000s",
+                    repeat_filter=".*")
+assert r.is_all_results_done(), r.get_error_results()
+```
+
+### Step 3 — Parse results using the bundled script
+
+```python
+import subprocess, json
+results_dir = p.get_full_path("results")
+
+out = subprocess.check_output([
+    "python3",
+    "<PATH-to-skill-pack>/opp-repl-result-analysis/scripts/parse_scalars.py",
+    results_dir,
+    "--group-by", "name",
+    "--output", "json",
+]).decode()
+aggregated = {r["name"]: r for r in json.loads(out)}
+
+sim_drop_prob   = aggregated["Mm1k.snk.dropProbability"]["mean"]
+sim_throughput  = aggregated["Mm1k.snk.throughput"]["mean"]
+sim_utilization = aggregated["Mm1k.queue.utilization"]["mean"]
+sim_E_N         = aggregated["Mm1k.queue.meanN"]["mean"]
+```
+
+(Exact scalar names depend on `@statistic(...)` declarations in
+the NED file.  See the scaffolding skill's `Network.ned` example
+for how to declare them.)
+
+### Step 4 — Analytical validation
+
+```python
+# Analytical M/M/1/K
+lam, mu, K = 0.8, 1.0, 5
+rho = lam / mu
+pi = [(1 - rho) / (1 - rho**(K+1)) * rho**n for n in range(K+1)]
+pi_drop = pi[K]
+analytical_throughput  = lam * (1 - pi_drop)
+analytical_utilization = 1 - pi[0]
+analytical_E_N         = sum(n * pi[n] for n in range(K+1))
+
+for label, sim, ana in [
+    ("drop prob", sim_drop_prob, pi_drop),
+    ("throughput", sim_throughput, analytical_throughput),
+    ("utilization", sim_utilization, analytical_utilization),
+    ("E[N]", sim_E_N, analytical_E_N),
+]:
+    err = abs(sim - ana) / ana * 100
+    print(f"{label:12s}  sim={sim:.4f}  analytical={ana:.4f}  rel err={err:.1f}%")
+```
+
+### What breaks (and what skill to reach for)
+
+| If you see                                                    | Load                                        |
+|---------------------------------------------------------------|---------------------------------------------|
+| `Exception: Building mm1k failed` (no details)                | `opp-repl-troubleshooting` §1               |
+| `ERROR (Non-zero exit code: 127)`                             | `opp-repl-troubleshooting` §2               |
+| `Class 'Source' not found`                                    | `opp-repl-troubleshooting` §4               |
+| `tr.stdout is None` and `tr.stderr is None` on ERROR          | `opp-repl-troubleshooting` §3               |
+| Simulation runs but the expected `.sca` columns are missing   | Re-check `@statistic(...)` in Mm1k.ned      |
+| Agent wrote a regex .sca parser                               | Use `parse_scalars.py` from `opp-repl-result-analysis` |
+
+This scenario is **intentionally prescriptive** — a weaker model
+that only follows the literal steps will still succeed.  Stronger
+models can deviate once they understand the pattern.
+
+═══════════════════════════════════════════════════════
 PATTERNS
 ═══════════════════════════════════════════════════════
 

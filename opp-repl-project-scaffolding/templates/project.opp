@@ -1,0 +1,18 @@
+# Template: .opp descriptor for a new executable project.
+# Save as <project>.opp in the project root, next to omnetpp.ini.
+#
+# REPLACE every occurrence of "mm1k" with your actual project name.
+# The project name must match:
+#   (1) the `-o <name>` flag in .oppbuildspec
+#   (2) the `executables=[...]` list below
+#   (3) the binary that `make_makefiles() + build_project()` produces
+
+SimulationProject(
+    name="mm1k",
+    root_folder=".",
+    omnetpp_project="omnetpp",
+    build_types=["executable"],
+    executables=["mm1k"],
+    ned_folders=["."],
+    ini_file_folders=["."],
+)

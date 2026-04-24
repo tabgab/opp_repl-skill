@@ -129,6 +129,18 @@ See `opp-repl-cli-tools` for the full flag table.
 - `sim_time_limit="1s"` is a STRING with a unit — not a number.
 - `build=False` + stale binary silently runs old code.  Keep `build`
   on unless you just built the same mode.
+- **`Exception: Building <X> failed` with no further info** almost
+  always means "no Makefile yet" — call `make_makefiles(simulation_project=p)`
+  once.  See `opp-repl-troubleshooting` §1.
+- **ERROR (Non-zero exit code: 127)** means the executable does not
+  exist (wrong name or not built).  Inspect
+  `tr.subprocess_result.stderr` for the real message; see
+  `opp-repl-troubleshooting` §2.
+- **`tr.stdout` / `tr.stderr` may be `None` on early failures.**
+  Always fall back to `tr.subprocess_result.stdout` / `.stderr`
+  when diagnosing an ERROR.  `tr.stdout` is only populated from
+  the configured `cmdenv-output-file`, which doesn't exist if the
+  process died before writing it.
 - In concurrent mode the on-screen order of results does not match
   task order.  Use `r.results[i].task` to correlate.
 - Interrupting (Ctrl-C) leaves partial result files in place; run
@@ -137,7 +149,11 @@ See `opp-repl-cli-tools` for the full flag table.
 ## See also
 
 - `opp-repl-concepts` — the object model.
+- `opp-repl-project-scaffolding` — generate Makefile + required files
+  BEFORE the first build (prevents the most common build failure).
 - `opp-repl-filtering` — narrow down which configs run.
 - `opp-repl-tasks-and-results` — inspect and rerun results.
+- `opp-repl-result-analysis` — read .sca/.vec files after a DONE run.
+- `opp-repl-troubleshooting` — decode opaque errors into fixes.
 - `opp-repl-ssh-cluster` — distribute to remote machines.
 - `opp-repl-cli-tools` — shell wrappers for CI.

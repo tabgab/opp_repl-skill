@@ -24,9 +24,32 @@ are:
   (global, workspace, and UI options).
 - `USAGE_EXAMPLES.md` — seven end-to-end prompt/response scenarios
   showing which skills load when.
-- `opp-repl-overview/SKILL.md` — the entry-point skill, load first.
+- `TROUBLESHOOTING.md` — symptom-to-skill lookup for common
+  build / run / analysis failures (read this when things break).
+- `opp-repl-overview/SKILL.md` — the entry-point skill, with a
+  decision tree that maps tasks to the exact siblings to load.
 - `opp-repl-ai-workflows/SKILL.md` — cookbook for agents driving
   opp_repl via MCP or shell.
+
+## What's new since initial release
+
+- **3 new skills** targeting the hardest friction points real AI
+  agents hit when using opp_repl:
+  - `opp-repl-project-scaffolding` — create a new OMNeT++ project
+    from zero (.opp, .oppbuildspec, .nedfolders, NED+C++ skeletons,
+    correct `make_makefiles()` + `build_project()` sequence).
+  - `opp-repl-result-analysis` — read `.sca`/`.vec` with either
+    `opp_scavetool` or the `omnetpp.scave.results` Python API;
+    bundles `scripts/parse_scalars.py` that works both ways.
+  - `opp-repl-troubleshooting` — decode every common opaque error
+    (exit 127, "Building X failed", "Class not found", ...) to
+    its cause and fix.
+- **Hardened existing skills** with the pitfalls these real users
+  hit — `opp-repl-running-simulations`, `opp-repl-tasks-and-results`,
+  `opp-repl-opp-files` all now explicitly warn about
+  `tr.subprocess_result.stderr` being the source of truth on
+  ERRORs, the `executables=[...]` requirement, and the Makefile
+  pre-generation step.
 
 ## How to load
 
@@ -69,10 +92,11 @@ prompt and let it pull full bodies on demand.
 ### Foundations
 | Skill                                 | What it covers                                        |
 |---------------------------------------|-------------------------------------------------------|
-| `opp-repl-overview`                   | Entry point + feature-to-skill map                    |
+| `opp-repl-overview`                   | Entry point + decision tree + feature-to-skill map    |
 | `opp-repl-installation`               | pip, extras, setenv, Ubuntu PEP-668                   |
 | `opp-repl-concepts`                   | Workspace / Project / Config / Task / Result model    |
 | `opp-repl-opp-files`                  | `.opp` descriptor format (+ 7 ready templates)        |
+| `opp-repl-project-scaffolding`        | **New project from zero** (+ 7 file templates)        |
 
 ### Execution & control
 | Skill                                 | What it covers                                        |
@@ -81,7 +105,8 @@ prompt and let it pull full bodies on demand.
 | `opp-repl-cli-tools`                  | Shell wrappers for CI                                 |
 | `opp-repl-running-simulations`        | `build_project` + `run_simulations`                   |
 | `opp-repl-filtering`                  | Shared filter vocabulary                              |
-| `opp-repl-tasks-and-results`          | Task hierarchy, rerun, drill-down, bisect             |
+| `opp-repl-tasks-and-results`          | Task hierarchy, rerun, drill-down                     |
+| `opp-repl-troubleshooting`            | **Symptom -> cause -> fix catalogue**                 |
 
 ### Regression tests
 | Skill                                 | What it covers                                        |
@@ -97,6 +122,7 @@ prompt and let it pull full bodies on demand.
 ### Analysis
 | Skill                                 | What it covers                                        |
 |---------------------------------------|-------------------------------------------------------|
+| `opp-repl-result-analysis`            | **Read .sca/.vec** (+ bundled `parse_scalars.py`)     |
 | `opp-repl-comparing-simulations`      | Cross-project / cross-commit comparison               |
 | `opp-repl-parameter-optimization`     | scipy Nelder-Mead tuning                              |
 | `opp-repl-coverage-reports`           | LLVM line coverage                                    |

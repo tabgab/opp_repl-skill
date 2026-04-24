@@ -129,6 +129,18 @@ upstream API has evolved.  The general pattern:
   error message; include `^`/`$` to anchor.
 - Reruns inherit the ORIGINAL task's parameters.  Override via
   kwargs: `result.rerun(sim_time_limit="10s")`.
+- **`tr.stdout` / `tr.stderr` may be `None` on ERROR.**  They are
+  parsed from files the simulation writes
+  (`cmdenv-output-file`, stderr capture) — if the process died
+  before writing, the fields stay `None`.  For EVERY `ERROR`
+  result, go to the raw subprocess output:
+
+      print(tr.subprocess_result.returncode)
+      print(tr.subprocess_result.stderr)
+      print(tr.subprocess_result.stdout)
+      print(tr.subprocess_result.args)   # shows the exact cmd line
+
+  See `opp-repl-troubleshooting` for an exit-code-to-cause table.
 
 ## See also
 
