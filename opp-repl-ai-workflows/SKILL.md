@@ -14,10 +14,12 @@ orchestration.
 ## Recipe 1 — "Run this simulation and report"
 
 **Prereqs**: `opp-repl-installation`, `opp-repl-opp-files`,
-`opp-repl-running-simulations`, `opp-repl-tasks-and-results`.
+`opp-repl-running-simulations`, `opp-repl-tasks-and-results`,
+`opp-repl-result-analysis`.
 
 1. If no `.opp` file exists for the target project, write one
-   (template from `opp-repl-opp-files/templates/`).
+   (template from `opp-repl-opp-files/templates/`), OR run
+   `create_project(name, path=...)` on current opp_repl.
 2. Start or attach to a REPL / MCP server.
 3. Run:
 
@@ -27,8 +29,12 @@ orchestration.
            sim_time_limit="1s")
 
 4. Summarise `r.get_error_results()` and
-   `r.is_all_results_done()`.  If errors, rerun a failing task in
-   debug mode and pull `print_stderr()` for diagnostics.
+   `r.is_all_results_done()`.  On failure, rerun a failing task
+   in debug mode and pull `print_stderr()` for diagnostics.
+5. On success, aggregate scalars:
+
+       df = r.get_scalars()             # DataFrame merged across reps
+       means = df.groupby("name").value.mean()
 
 ## Recipe 2 — "Investigate a regression"
 
@@ -93,29 +99,34 @@ repeats before giving up.
 
 ## Recipe 5 — "Set up a new simulation project from scratch"
 
-**Prereqs**: `opp-repl-installation`, `opp-repl-opp-files`,
-`opp-repl-concepts`, `opp-repl-running-simulations`.
+**Prereqs**: `opp-repl-installation`, `opp-repl-project-scaffolding`,
+`opp-repl-concepts`, `opp-repl-running-simulations`,
+`opp-repl-result-analysis`.
 
-1. Confirm OMNeT++ is installed and `setenv` works.
-2. Install opp_repl:
+On current opp_repl (>= commit a17fcab, Apr 2026):
 
-       pip install "opp_repl[all]"
+```python
+from opp_repl.simulation.project import create_project
 
-3. Write `.opp` files:
-   - `omnetpp.opp` at the OMNeT++ root
-     (template: `templates/omnetpp.opp`).
-   - `<project>.opp` at the simulation project root
-     (pick the closest template: inet / simu5g / sample_executable).
-4. Launch the REPL:
+# Generates <name>.opp, .oppbuildspec, .nedfolders, package.ned,
+# omnetpp.ini; loads the project; returns the SimulationProject.
+p = create_project("mm1k", path="/tmp", namespace=False)
 
-       opp_repl --load "<project>/*.opp" --load <omnetpp>/omnetpp.opp
+# Now add NED + C++:
+#   /tmp/mm1k/Mm1k.ned
+#   /tmp/mm1k/Source.{h,cc}   Queue.{h,cc}   Sink.{h,cc}
+# and edit /tmp/mm1k/omnetpp.ini to set `network = Mm1k` +
+# parameter assignments.
 
-5. Verify:
+p.build()
+r = run_simulations(simulation_project=p, sim_time_limit="100s")
+df = r.get_scalars()
+```
 
-       p = get_default_simulation_project()
-       [c.config for c in p.get_simulation_configs()]
-       r = run_simulations(sim_time_limit="0.3s",
-                           build=True, concurrent=False)
+On older opp_repl, copy templates from
+`opp-repl-project-scaffolding/templates/` into a fresh directory
+instead, rename `mm1k` to your chosen name everywhere, then
+`load_opp_file()` + `build_project()` + `run_simulations()`.
 
 ## Recipe 6 — "Distribute a parameter sweep to a cluster"
 

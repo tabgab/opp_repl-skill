@@ -1,226 +1,145 @@
 ---
 name: opp-repl-project-scaffolding
-description: Create a NEW OMNeT++ project from scratch that works with opp_repl — the complete required-file set (.opp, .oppbuildspec, .nedfolders, omnetpp.ini, NED, C++, Makefile). Covers the single most common failure mode ("build_project failed with no explanation" = no Makefile yet) and the exact opp_repl call sequence to go from zero files to a working simulation. Load BEFORE building any project that doesn't already have a Makefile checked in. Required when the user says "create a new simulation" or "build an OMNeT++ example from scratch".
+description: Create a NEW OMNeT++ project from scratch that works with opp_repl. On current opp_repl (Apr 2026+) this is a single function call — `create_project(name, path=..., namespace=False)` — which generates every required file (.opp, .oppbuildspec, .nedfolders, package.ned, omnetpp.ini). Load BEFORE building any project that doesn't already have a Makefile checked in. Required when the user says "create a new simulation" or "build an OMNeT++ example from scratch".
 ---
 
 # Creating a new OMNeT++ project for opp_repl
 
-Every OMNeT++ project needs a specific set of files on disk before
-opp_repl can build it.  Missing any of them produces cryptic
-errors ("Building X failed", exit code 127, "Class not found").
-This skill gives you the exact template set and the call sequence
-that always works.
+On current opp_repl main (>= commit a17fcab, Apr 2026), scaffolding
+a new project is ONE function call.  Older opp_repl requires copying
+the templates bundled with this skill.  Both paths are documented
+below; prefer the one-call path if `create_project()` is available.
 
 ## The canonical file set
 
-| File                | Purpose                                           | Required? |
-|---------------------|---------------------------------------------------|-----------|
-| `<project>.opp`     | opp_repl project descriptor                       | **YES**   |
-| `.oppbuildspec`     | OMNeT++ makemake options (XML)                    | **YES**   |
-| `.nedfolders`       | NED source roots (text, one folder per line)      | **YES**   |
-| `omnetpp.ini`       | Simulation config                                 | **YES**   |
-| `*.ned`             | Network / module definitions                      | **YES**   |
-| `*.cc` / `*.h`      | C++ simple-module implementations                 | usually   |
-| `*.msg`             | Message class declarations                        | often     |
-| `Makefile`          | Generated on first build, commit only if stable   | **YES at build time** |
+| File             | Purpose                                           | Required? |
+|------------------|---------------------------------------------------|-----------|
+| `<project>.opp`  | opp_repl project descriptor                       | **YES**   |
+| `.oppbuildspec`  | OMNeT++ makemake options (XML)                    | **YES**   |
+| `.nedfolders`    | NED source roots (one folder per line)            | **YES**   |
+| `package.ned`    | NED package declaration (usually empty)           | **YES**   |
+| `omnetpp.ini`    | Simulation config                                 | **YES**   |
+| `*.ned`          | Network / module definitions                      | **YES**   |
+| `*.cc` / `*.h`   | C++ simple-module implementations                 | usually   |
+| `*.msg`          | Message class declarations                        | often     |
+| `Makefile`       | Generated on first build                          | **YES at build time** |
 
-All are bundled as templates under `templates/` in this skill.
+## Path A — `create_project()` (recommended, current opp_repl)
 
-## The five-step recipe that always works
+    from opp_repl.simulation.project import create_project
 
-    # 0. Pre-reqs: OMNeT++ setenv sourced, opp_repl installed,
-    #    pwd is the new project directory.
+    p = create_project(
+        "mm1k",             # project name
+        path="/tmp",        # parent dir; omit for cwd
+        namespace=False,    # True wraps NED in @namespace and expects
+                            # matching `namespace mm1k { }` in C++
+        template="executable",
+        omnetpp_project="omnetpp",
+    )
+    # Creates /tmp/mm1k/ with:
+    #   mm1k.opp   .oppbuildspec   .nedfolders
+    #   package.ned   omnetpp.ini
+    # Loads the .opp into the workspace and returns a SimulationProject.
 
-    # 1. Write the files.
-    #    Use the templates in this skill:
-    #      templates/project.opp
-    #      templates/.oppbuildspec
-    #      templates/.nedfolders
-    #      templates/omnetpp.ini
-    #      templates/Source.{h,cc}    (example module)
-    #      templates/Network.ned      (example network)
+After this, add your NED network and C++ source files, then:
 
-    # 2. Build.
-    #    On current opp_repl main (>= commit 21ea1f0, Apr 2026),
-    #    build_project() auto-generates the Makefile by calling
-    #    generate_makefile() internally — it reads .oppbuildspec,
-    #    strips --meta:* flags, adds `-o <project_name>` when
-    #    build_types includes "executable", and runs opp_makemake.
-    #    You just call:
-    build_project(simulation_project=mm1k_project)
+    p.build()
+    r = run_simulations(simulation_project=p, sim_time_limit="100s")
 
-    # 3. Run.
-    r = run_simulations(simulation_project=mm1k_project,
-                        sim_time_limit="100s")
-    assert r.is_all_results_done()
+The generated `omnetpp.ini` is a bare `[General]` — you'll almost
+always add a `network = ...` line and parameter assignments.
 
-    # ── for older opp_repl (pre-21ea1f0) the bootstrap used
-    # ── to need an explicit opp_makemake call first:
-    #     import subprocess
-    #     subprocess.run(["opp_makemake", "-f", "--deep", "-o", "mm1k"],
-    #                    cwd=p.root_folder, check=True)
-    #     build_project(simulation_project=p)
-    # If `build_project()` fails with "No targets specified and no
-    # makefile found", you're on older opp_repl — either update or
-    # use the workaround above.
+`create_project()` raises if the target directory exists and is not
+empty.
 
-Single shell-equivalent recipe:
+Reference:
+https://github.com/omnetpp/opp_repl/blob/main/doc/simulation_projects.md#creating-a-project-from-scratch
+
+## Path B — copy the templates (older opp_repl, or when you need full control)
+
+Bundled under `templates/` (edit each one, replacing `mm1k` with your
+project name):
+
+| File                                  | Use case                            |
+|---------------------------------------|-------------------------------------|
+| `templates/project.opp`               | The `<name>.opp` descriptor         |
+| `templates/.oppbuildspec`             | makemake flags (valid XML, no `--` in comments) |
+| `templates/.nedfolders`               | NED roots (one dot)                 |
+| `templates/omnetpp.ini`               | Minimal runnable config             |
+| `templates/Network.ned`               | 1-module network skeleton           |
+| `templates/Source.{h,cc}`             | Skeleton simple module              |
+
+Then:
+
+    load_opp_file("./mm1k.opp")
+    p = get_simulation_project("mm1k")
+    p.build()   # auto-generates Makefile on opp_repl >= 21ea1f0
+
+On older opp_repl (pre-21ea1f0) you also need a one-time bootstrap:
 
     opp_makemake -f --deep -o mm1k
-    make MODE=release -j$(nproc)
-    opp_run -r 0 -c General omnetpp.ini
 
-## Why `build_project()` used to fail with "no explanation"
+## The namespace / package trap
 
-On older opp_repl (before commit 21ea1f0, "Added generate_makefile
-using .oppbuildspec if found, otherwise use sensible defaults"),
-`build_project()` called `make MODE=release` with no Makefile
-present and failed with:
+If your C++ wraps `Define_Module()` in `namespace mm1k { ... }`, your
+NED **must** declare a matching package.  `create_project()` handles
+this via the `namespace=True` flag — it writes `@namespace(mm1k);`
+into `package.ned`, and you wrap every `.cc` that registers a module
+in `namespace mm1k { ... }`.
 
-    Exception: Building mm1k failed
-    # (no further info)
+If they don't match, every run fails with:
 
-**This is fixed on current main.**  `build_project()` now detects
-a missing `Makefile` and auto-runs `generate_makefile()`, which
-reads `.oppbuildspec` and invokes `opp_makemake` with the right
-flags (stripping `--meta:*` which is only valid inside
-.oppbuildspec, adding `-o <project_name>` when the project is
-declared as an executable).
+    Class 'Source' not found
 
-If you're on older opp_repl, bootstrap manually:
+Simplest rule: **pick one and apply it everywhere, or use neither**.
+`create_project(..., namespace=False)` (the default) produces an
+empty `package.ned` and expects no C++ namespace — fewest traps.
 
-    opp_makemake -f --deep -o <project_name>
+Diagnostic: after a failed run, list registered class names from the
+binary and compare against the NED types used in the network:
 
-then call `build_project()` as usual.
-
-## Why the executable is named wrong
-
-When `opp_makemake` runs without `-o <name>`, it derives the
-target name from the directory name.  opp_repl's `SimulationTask`
-expects the binary to match the **project name** in the `.opp`
-file.  Mismatches produce:
-
-    ERROR (Non-zero exit code: 127)
-    # and inside tr.subprocess_result.stderr:
-    # nice: execvp: No such file or directory
-
-**Three prevention strategies** (pick one):
-
-1. **Easiest** — name the project directory the same as the
-   project, and let `opp_makemake` pick the default.  E.g. put
-   the project in `mm1k/` and call it `name="mm1k"`.
-
-2. **Explicit in .oppbuildspec** — add `-o <name>` to the
-   `makemake-options` attribute:
-
-       <dir makemake-options="--deep -o mm1k ..." path="." type="makemake"/>
-
-   Then `make_makefiles()` passes `-o mm1k` automatically.
-
-3. **Explicit in the SimulationProject** — declare the
-   executable name in the `.opp` file so opp_repl's `build_types`
-   machinery uses it:
-
-       SimulationProject(
-           name="mm1k",
-           root_folder=".",
-           omnetpp_project="omnetpp",
-           build_types=["executable"],
-           executables=["mm1k"],     # <- this line
-           ned_folders=["."],
-           ini_file_folders=["."],
-       )
-
-## C++ namespace vs NED package (the "Class not found" trap)
-
-If you write:
-
-    // Source.cc
-    namespace mm1k {
-        Define_Module(Source);   // registers as mm1k::Source
-    }
-
-then the simulation will fail with `Class 'Source' not found`
-unless your NED also declares the same package:
-
-    // Source.ned
-    package mm1k;
-    simple Source { ... }
-
-**Rules**:
-- Either use `package X;` in ALL your .ned files AND
-  `namespace X { ... }` in ALL your .cc files, with `X` matching.
-- Or use NEITHER — no package, no namespace.
-
-Diagnostic check: after a failed run, inspect registered classes:
-
-    # In a shell
     opp_run_release -a omnetpp.ini | grep "Source"
-    # Expected: "Module 'mm1k::Source' (Source)"
-    # If you see "mm1k::Source" but your .ned uses just "Source",
-    # add `package mm1k;` to the .ned files (or remove the C++
-    # namespace).
+    # Module 'mm1k::Source' (Source)  ← namespace is 'mm1k'
+    # If your .ned uses `Source` (no package), add `package mm1k;`
+    # or `@namespace(mm1k);` — or strip the C++ namespace.
 
-## Minimal .opp for a new executable project
+## Minimal `.opp` for a new executable project
 
-    # mm1k.opp
+This is what `create_project()` writes; it's also what you'd hand-
+author for Path B:
+
     SimulationProject(
         name="mm1k",
         root_folder=".",
         omnetpp_project="omnetpp",
         build_types=["executable"],
-        executables=["mm1k"],
         ned_folders=["."],
         ini_file_folders=["."],
     )
 
-## Minimal .oppbuildspec
-
-    <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-    <buildspec version="4.0">
-        <dir
-            makemake-options="--deep --meta:recurse --meta:export-library --meta:use-exported-libs -o mm1k"
-            path="."
-            type="makemake"/>
-    </buildspec>
-
-Note the `-o mm1k` — this makes make_makefiles()'s output binary
-match the project name automatically.
-
-## Minimal .nedfolders
-
-    .
-
-(One line.  A dot means "scan this folder and subfolders".)
+On recent opp_repl you no longer need `executables=["mm1k"]` —
+`generate_makefile()` auto-adds `-o mm1k` when `build_types`
+contains `"executable"`.  Older opp_repl needs the explicit list.
 
 ## Iteration loop
 
-After editing any source file:
+- Edit `.ned` files — no rebuild needed, NED loads at runtime.
+- Edit `.cc` / `.h` / `.msg` — call `p.build()` or
+  `build_project(simulation_project=p)`.
+- Edit `.oppbuildspec` or add/remove source files that change the
+  target list — regenerate:
 
-    # Re-build incrementally (Makefile picks up timestamps)
-    build_project(simulation_project=mm1k_project)
-
-    # Re-run
-    r = run_simulations(simulation_project=mm1k_project,
-                        sim_time_limit="100s")
-
-After editing `.oppbuildspec` or adding/removing NED/C++ source
-files:
-
-    make_makefiles(simulation_project=mm1k_project)
-    build_project(simulation_project=mm1k_project)
-
-After editing `.ned` files only — no rebuild needed, NED is
-loaded at runtime.  Just re-run.
+      from opp_repl.simulation.build import generate_makefile
+      generate_makefile(simulation_project=p)
+      p.build()
 
 ## Verification script
 
-Drop this into a Python one-liner to confirm the project is
-wired up before trusting a first build:
+Drop this into a Python one-liner to confirm the project is wired
+up before trusting a first build:
 
     p = get_simulation_project("mm1k")
-    assert p.build_types == ["executable"], "must be executable"
-    assert p.executables == ["mm1k"], "executable name must match project"
+    assert p.build_types == ["executable"]
     import os
     root = p.get_full_path(".")
     for f in [".oppbuildspec", ".nedfolders", "mm1k.opp", "omnetpp.ini"]:
@@ -229,25 +148,28 @@ wired up before trusting a first build:
 
 ## Pitfalls
 
-- **NEVER edit the generated `Makefile`** — it will be overwritten
-  on the next `make_makefiles()` call.  Change `.oppbuildspec`
-  instead.
+- **NEVER edit the generated `Makefile`** — overwritten on next
+  Makefile regeneration.  Change `.oppbuildspec` instead.
+- **Invalid XML in `.oppbuildspec`** — the new
+  `generate_makefile()` parses it strictly; XML comments cannot
+  contain `--`, so `<!-- --deep ... -->` is rejected.  See
+  `opp-repl-troubleshooting` §11.
 - **The `<project>.opp` file MUST sit inside the project root**
   (or you must specify `root_folder` as an absolute path).  The
   auto-detect-project-from-CWD feature uses the `.opp` file's
   directory as the root.
 - **Dependencies** — if your project uses INET or another library,
-  list it in `used_projects=["inet"]` on the SimulationProject AND
-  make sure an `inet.opp` is loaded.
+  list it in `used_projects=["inet"]` AND make sure an `inet.opp`
+  is loaded.
 - **Case sensitivity** — NED type names, class names, and the
-  `Define_Module()` argument are all case-sensitive and must match
-  exactly across .ned, .cc, and .ini.
+  `Define_Module()` argument must match exactly across `.ned`,
+  `.cc`, and `.ini`.
 
 ## See also
 
 - `opp-repl-opp-files` — full `.opp` descriptor syntax and templates.
 - `opp-repl-running-simulations` — what `build_project()` /
-  `run_simulations()` actually do.
+  `run_simulations()` do.
 - `opp-repl-troubleshooting` — decoding "exit 127", "class not found",
   "building X failed".
 - `opp-repl-result-analysis` — reading .sca results once runs succeed.

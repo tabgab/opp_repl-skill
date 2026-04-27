@@ -287,89 +287,83 @@ Skills to load (in order, the weak model doesn't have to pick):
 5. `opp-repl-result-analysis`       (read .sca for validation)
 6. `opp-repl-troubleshooting`       (on standby for when things break)
 
-### Step 1 — Copy templates from the scaffolding skill
+### Step 1 — Scaffold the project with `create_project()`
 
-From `opp-repl-project-scaffolding/templates/`, copy and edit:
-
-```
-mm1k/
-├── mm1k.opp              # from project.opp — change "mm1k" to "mm1k"
-├── .oppbuildspec         # from .oppbuildspec — set -o mm1k
-├── .nedfolders           # from .nedfolders — leave as "."
-├── omnetpp.ini           # from omnetpp.ini — edit configs
-├── Mm1k.ned              # from Network.ned — rename network, add Queue
-├── Source.h / .cc        # from Source.h / .cc
-├── Queue.h  / .cc        # duplicate Source.* and implement M/M/1/K queue
-└── Sink.h   / .cc        # duplicate Source.* — collect statistics
-```
-
-Keep namespaces OFF in both C++ and NED (simplest; fewest traps).
-
-### Step 2 — Build with the exact opp_repl call sequence
-
-This is the sequence that works.  Critical: bootstrap with
-`opp_makemake` once BEFORE the first `build_project()`.
+On current opp_repl (>= a17fcab, Apr 2026) this is ONE call — no
+template copy/paste:
 
 ```python
-# Pre-req: setenv sourced correctly.  IMPORTANT ORDER:
-#   source <opp_repl>/setenv  FIRST   (activates .venv)
-#   source <omnetpp>/setenv   SECOND  (prepends OMNeT++ bin)
-# Verify with `command -v opp_makemake opp_run opp_repl`.
+from opp_repl.simulation.project import create_project
 
-# Working directory: /path/to/mm1k
-import subprocess
-from opp_repl.simulation.build import make_makefiles
+p = create_project("mm1k", path="/tmp", namespace=False)
+# Creates /tmp/mm1k/ with mm1k.opp, .oppbuildspec, .nedfolders,
+# package.ned (empty because namespace=False), and a bare
+# omnetpp.ini.  Returns the registered SimulationProject.
+```
 
-# Load project into workspace
-load_opp_file("./mm1k.opp")
-p = get_simulation_project("mm1k")
+Now add the domain-specific files under `/tmp/mm1k/`:
 
-# BOOTSTRAP: create the initial Makefile ONCE.  Without this,
-# build_project() fails with "Exception: Building mm1k failed"
-# because there's no Makefile to run `make` against.
-subprocess.run(["opp_makemake", "-f", "--deep", "-o", "mm1k"],
-               cwd=p.root_folder, check=True)
+- `Mm1k.ned` — Source → Queue → Sink network with `@statistic`
+  declarations for the metrics you want recorded.
+- `Source.{h,cc}` — Poisson arrivals.
+- `Queue.{h,cc}` — finite buffer of size K, exponential service.
+- `Sink.{h,cc}` — deletes received jobs.
 
-# From now on, opp_repl handles everything
-build_project(simulation_project=p)
+Edit `/tmp/mm1k/omnetpp.ini` — the generated file is just
+`[General]`, so set `network = Mm1k`, `sim-time-limit`, `repeat`,
+and parameter assignments.
 
-# Run 10 replications
+Because we passed `namespace=False`, keep `Define_Module()` calls
+outside any `namespace` block in the C++ — matches the empty
+`package.ned` and avoids the class-not-found trap per the
+scaffolding skill §"C++ namespace vs NED package".
+
+### Step 2 — Build and run
+
+```python
+# Build: on current opp_repl, build_project auto-generates the
+# Makefile from .oppbuildspec.  No explicit opp_makemake call.
+p.build()
+
+# Run 10 replications of 5000 s each, concurrently.
 r = run_simulations(simulation_project=p, sim_time_limit="5000s",
                     build=False, concurrent=True)
 assert r.is_all_results_done(), r.get_error_results()
 ```
 
-If you later change `.oppbuildspec` or add/remove source files:
+### Step 3 — Read results in one call
 
 ```python
-make_makefiles(simulation_project=p)   # regenerate
-build_project(simulation_project=p)
-```
+# r.get_scalars() returns a pandas DataFrame concatenated across
+# every DONE replication.
+df = r.get_scalars()
+agg = df.groupby("name").value.mean()
 
-### Step 3 — Parse results using the bundled script
-
-```python
-import subprocess, json
-results_dir = p.get_full_path("results")
-
-out = subprocess.check_output([
-    "python3",
-    "<PATH-to-skill-pack>/opp-repl-result-analysis/scripts/parse_scalars.py",
-    results_dir,
-    "--group-by", "name",
-    "--output", "json",
-]).decode()
-aggregated = {r["name"]: r for r in json.loads(out)}
-
-sim_drop_prob   = aggregated["Mm1k.snk.dropProbability"]["mean"]
-sim_throughput  = aggregated["Mm1k.snk.throughput"]["mean"]
-sim_utilization = aggregated["Mm1k.queue.utilization"]["mean"]
-sim_E_N         = aggregated["Mm1k.queue.meanN"]["mean"]
+sim_accepted   = agg["accepted:last"]
+sim_dropped    = agg["dropped:last"]
+sim_generated  = agg["generated:last"]
+sim_util       = agg["utilization:last"]
+sim_meanN      = agg["meanN:last"]
+sim_sojourn    = agg["meanSojourn:mean"]
 ```
 
 (Exact scalar names depend on `@statistic(...)` declarations in
-the NED file.  See the scaffolding skill's `Network.ned` example
-for how to declare them.)
+`Mm1k.ned`.  See `opp-repl-project-scaffolding`'s note on
+`@statistic` + the bundled `Network.ned` example.)
+
+### Fallback for older opp_repl
+
+If `create_project()` or `r.get_scalars()` isn't available (pre-
+Apr-2026 opp_repl):
+
+- Scaffolding: copy `opp-repl-project-scaffolding/templates/*` into
+  a new directory, rename `mm1k` everywhere, then
+  `load_opp_file()` + `build_project()`.  May also need
+  `opp_makemake -f --deep -o mm1k` one-time bootstrap on pre-21ea1f0.
+- Results: run `parse_scalars.py` (bundled in
+  `opp-repl-result-analysis/scripts/`) against `results/` — it
+  tries the scave Python API first, falls back to
+  `opp_scavetool`.
 
 ### Step 4 — Analytical validation
 

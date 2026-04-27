@@ -61,6 +61,21 @@ Post-mortem trajectories:
     ft = t.get_fingerprint_trajectory()   # per-event fingerprint values
     st = t.get_stdout_trajectory()        # event# <-> stdout lines (regex OK)
 
+Result-data accessors (current opp_repl, >= commit 2e6835e):
+
+    df = t.get_scalars()      # .sca file as a pandas DataFrame
+    df = t.get_vectors()      # .vec file as a pandas DataFrame
+    df = t.get_histograms()   # histograms from .sca
+
+Signatures:
+
+    get_scalars(include_fields=True, include_runattrs=False, **kwargs)
+    get_vectors(include_runattrs=False, **kwargs)
+    get_histograms(include_runattrs=False, **kwargs)
+
+See `opp-repl-result-analysis` for typical aggregation patterns,
+filter options, and fallbacks for older opp_repl.
+
 ## MultipleTaskResults drill-down
 
     r = run_simulations(sim_time_limit="1s")
@@ -77,6 +92,21 @@ Post-mortem trajectories:
         error_message_regex="Unknown parameter")
 
 Every filter returns a new `MultipleTaskResults`, so chains compose.
+
+### Aggregated result-data accessors
+
+`MultipleSimulationTaskResults` (current opp_repl) also exposes
+the same `.get_scalars()` / `.get_vectors()` / `.get_histograms()`
+methods.  They concatenate per-run DataFrames across every DONE
+result:
+
+    r = run_simulations(sim_time_limit="1s")
+    df = r.get_scalars()     # one row per (run, module, name)
+    df.groupby("name").value.mean()   # aggregate across reps
+
+Non-DONE results (SKIP, CANCEL, ERROR, FAIL) contribute nothing —
+the method silently skips them.  Check `r.is_all_results_done()`
+first if your aggregation looks sparse.
 
 ## Re-running
 

@@ -28,11 +28,13 @@ three interfaces:
 build, run).
   -> `opp-repl-project-scaffolding`  (← START HERE for
      "make a new simulation", "create a new model", "build an
-     example from zero")
+     example from zero").  On current opp_repl this is ONE
+     function call: `create_project(name, path=..., namespace=False)`.
   -> then `opp-repl-running-simulations`
   -> then `opp-repl-result-analysis` to read the numbers out
+     (on current opp_repl: `r.get_scalars()` on the result).
   -> keep `opp-repl-troubleshooting` on hand; new projects hit
-     §1, §2, §4 of that skill on almost every first build.
+     §4 of that skill on namespace/package mismatches.
 
 **...run simulations that already exist.**
   -> `opp-repl-running-simulations` + `opp-repl-filtering`
@@ -115,6 +117,19 @@ build, run).
 | opp_env integration         | `opp-repl-opp-env-integration`     |
 | MCP server for AI agents    | `opp-repl-mcp-server`              |
 | End-to-end AI recipes       | `opp-repl-ai-workflows`            |
+
+## Upstream API touchpoints worth knowing
+
+Three high-value APIs on current opp_repl (Apr 2026+) that the
+skills route you to:
+
+- `create_project(name, path=..., namespace=False)` — scaffold a
+  new project in one call.  See `opp-repl-project-scaffolding`.
+- `build_project(simulation_project=p)` — builds.  Auto-generates
+  the Makefile from `.oppbuildspec` on the first call.
+- `r.get_scalars()` / `r.get_vectors()` / `r.get_histograms()` —
+  read results into a pandas DataFrame directly from a
+  `SimulationTaskResult` or `MultipleSimulationTaskResults`.
 
 ## Minimum viable skill set for a first session
 

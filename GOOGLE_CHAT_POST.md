@@ -46,21 +46,20 @@ That's exactly what we had. Four skills loaded in that order.
 
 ## Step 1 — Scaffold the project
 
-The scaffolding skill ships with seven ready-to-copy templates (`project.opp`, `.oppbuildspec`, `.nedfolders`, `omnetpp.ini`, `Network.ned`, `Source.h`, `Source.cc`) under its `templates/` directory. The skill's instructions open with:
+On current opp_repl main (>= commit `a17fcab`, late April 2026), scaffolding a new project is a single function call:
 
-> ## The canonical file set
->
-> | File             | Purpose                                           | Required? |
-> |------------------|---------------------------------------------------|-----------|
-> | `<project>.opp`  | opp_repl project descriptor                       | **YES**   |
-> | `.oppbuildspec`  | OMNeT++ makemake options (XML)                    | **YES**   |
-> | `.nedfolders`    | NED source roots                                  | **YES**   |
-> | `omnetpp.ini`    | Simulation config                                 | **YES**   |
-> | `*.ned`          | Network / module definitions                      | **YES**   |
-> | `*.cc` / `*.h`   | C++ simple-module implementations                 | usually   |
-> | `Makefile`       | Generated on first build                          | **YES at build time** |
+```python
+from opp_repl.simulation.project import create_project
 
-The agent worked in a fresh directory `/tmp/mm1k-verify/`, copied the templates verbatim, then wrote three domain-specific pieces:
+p = create_project("mm1k", path="/tmp", namespace=False)
+# Creates /tmp/mm1k/ with mm1k.opp, .oppbuildspec, .nedfolders,
+# package.ned (empty), omnetpp.ini (minimal [General]).
+# Registers the project in the workspace and returns it.
+```
+
+On older opp_repl (pre-`a17fcab`), the scaffolding skill instead tells the agent to copy seven hand-authored templates (`project.opp`, `.oppbuildspec`, `.nedfolders`, `omnetpp.ini`, `Network.ned`, `Source.h`, `Source.cc`) from its bundled `templates/` directory and edit each. The skill documents both paths so it keeps working for any version.
+
+Either way, the agent then wrote three domain-specific pieces:
 
 **`Mm1k.ned`** — the network with `@statistic` declarations that expose the scalars OMNeT++'s scave API will later hand back as DataFrame columns:
 
@@ -128,9 +127,9 @@ void Queue::handleMessage(cMessage *msg) {
 }
 ```
 
-Note the scaffolding skill's *"no namespace, no package"* guidance — it's the simplest way to avoid OMNeT++'s classic "`Class 'Source' not found`" trap. The skill has a whole section on it:
+Because the `create_project(..., namespace=False)` call above wrote an empty `package.ned`, we keep all `Define_Module()` calls outside any `namespace` block in the C++. Matching the two halves is the only way to avoid OMNeT++'s classic "`Class 'Source' not found`" trap. The scaffolding skill states the rule:
 
-> If your C++ is wrapped in `namespace mm1k { ... }`, every `.ned` in the project MUST declare `package mm1k;`. Either both have a namespace/package, or neither.
+> If your C++ is wrapped in `namespace mm1k { ... }`, every `.ned` in the project MUST declare `package mm1k;` (or `@namespace(mm1k);` in `package.ned`). Either both have a namespace/package, or neither.
 
 We chose *neither*.
 
@@ -182,25 +181,21 @@ All 10 DONE. Ten `.sca` files now sit under `results/General-#{0..9}.sca`.
 
 ## Step 4 — Read the numbers out
 
-Two approaches the skill offers. The modern one (upstream commit `2e6835e`, landed while we were working) is literally one method call per task result:
-
-> ```python
-> scalars = r.get_scalars()  # pandas DataFrame merged across all 10 reps
-> ```
-
-The other — which still works anywhere and is what our skill pack's bundled `parse_scalars.py` uses as a fallback — is OMNeT++'s own scave API that ships with every install:
+Upstream opp_repl shipped result-reading methods directly on the task-result object (commit `2e6835e`), so the whole "load .sca, call scave API, aggregate" step collapses to one line:
 
 ```python
-import os, sys
-sys.path.insert(0, os.path.join(os.environ["__omnetpp_root_dir"], "python"))
-from omnetpp.scave.results import read_result_files, get_scalars
-
-df = read_result_files("results/*.sca", include_fields_as_scalars=True)
-scalars = get_scalars(df, include_runattrs=True)
-means = scalars.groupby("name").value.mean()
+df = r.get_scalars()                    # pandas DataFrame merged across 10 reps
+# also available: r.get_vectors(), r.get_histograms()
+# and on a single result: r.results[0].get_scalars()
 ```
 
-Either path returns a DataFrame you can aggregate. In our run:
+Columns include `runID`, `module`, `name`, `value`, plus run metadata (`configname`, `repetition`, `seedset`, …). Aggregating across replications is a one-liner:
+
+```python
+means = df.groupby("name").value.mean()
+```
+
+In our run:
 
 ```
 accepted:count        3627.9
@@ -210,6 +205,8 @@ meanN:last               1.8496
 meanSojourn:mean         2.5494
 utilization:last         0.7249
 ```
+
+For external scripts / CI jobs that can't import opp_repl, the skill pack also bundles `scripts/parse_scalars.py` which wraps OMNeT++'s own `opp_scavetool` and the `omnetpp.scave.results` Python API. Same numbers, language-neutral invocation.
 
 ---
 
